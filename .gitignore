@@ -1,6 +1,6 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
 
 # Expo
@@ -9,52 +9,76 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Metro cache
+.metro/
+.metro-health-check*
+
+# Native files and signing keys (never commit secrets or keystores)
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
 *.pem
+*.cer
+*.der
 
-# local env files
-.env
-.env.*
+# Generated native folders (for Expo prebuild)
+/ios/
+/android/
 
-# typescript
-*.tsbuildinfo
-
-# generated native folders
-/ios
-/android
-
-# build outputs
+# Build outputs
 *.apk
 *.aab
 *.ipa
 
-# IDE
-.idea/
+# Local environment files (contain sensitive API keys and secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+
+# Logs and Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# IDEs and Editors
 .vscode/
+.idea/
 *.swp
 *.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
-# Claude Code / OMC local state
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+
+# Tooling local state
 .claude/
 .omc/
-
-# OS
-Thumbs.db
+.gemini/
