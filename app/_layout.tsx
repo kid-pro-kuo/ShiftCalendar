@@ -10,12 +10,16 @@ import { ShiftProvider, useShifts } from '../hooks/ShiftContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Onboarding } from '../components/Onboarding';
 import { useDeepLinkHandler } from '../hooks/useDeepLinkHandler';
+import { AuthProvider, useAuth } from '../hooks/AuthContext';
+import { AuthScreen } from '../components/AuthScreen';
+
 
 SplashScreen.preventAutoHideAsync();
 
 function InnerLayout() {
   const { isDark, colors, onboardingComplete, completeOnboarding } = useAppSettings();
   const { loading, allShifts, setShiftsBulk, setNote, setOvertime } = useShifts();
+  const { isAuthenticated, isCheckingAuth } = useAuth();
 
   useDeepLinkHandler({ loading, allShifts, setShiftsBulk, setNote, setOvertime });
 
@@ -33,12 +37,12 @@ function InnerLayout() {
   }, [colors.background]);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !isCheckingAuth) {
       SplashScreen.hideAsync();
     }
-  }, [loading]);
+  }, [loading, isCheckingAuth]);
 
-  if (loading) {
+  if (loading || isCheckingAuth) {
     return (
       <View style={[splashStyles.container, { backgroundColor: colors.background }]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -47,6 +51,15 @@ function InnerLayout() {
         </View>
         <Text style={[splashStyles.title, { color: colors.text }]}>ShiftCalendar</Text>
         <ActivityIndicator size="small" color={colors.primary} style={splashStyles.spinner} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <AuthScreen />
       </View>
     );
   }
@@ -102,9 +115,11 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <ShiftProvider>
-          <InnerLayout />
-        </ShiftProvider>
+        <AuthProvider>
+          <ShiftProvider>
+            <InnerLayout />
+          </ShiftProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

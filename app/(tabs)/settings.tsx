@@ -27,6 +27,8 @@ import { NotificationsSection } from '../../components/settings/NotificationsSec
 import { ImportExportSection } from '../../components/settings/ImportExportSection';
 import { ShiftsSection } from '../../components/settings/ShiftsSection';
 import { AboutSection } from '../../components/settings/AboutSection';
+import { SecuritySection } from '../../components/settings/SecuritySection';
+
 
 export default function SettingsScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -367,6 +369,8 @@ export default function SettingsScreen() {
           setWeekStart={setWeekStart}
           themeModes={themeModes}
         />
+
+        <SecuritySection colors={colors} />
 
         <ImportExportSection
           colors={colors}
