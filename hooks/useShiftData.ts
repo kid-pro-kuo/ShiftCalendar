@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ShiftType, DEFAULT_SHIFTS } from '../constants/shifts';
 import { LeaveType, DEFAULT_LEAVE_TYPES } from '../constants/leaveTypes';
+import { doc, getDoc, setDoc, updateDoc, deleteField } from 'firebase/firestore';
+import { db } from '../utils/firebase';
+
 
 const SCHEMA_VERSION_KEY = 'schema_version';
 const CURRENT_SCHEMA = 2;
@@ -54,6 +57,7 @@ export interface CalendarInfo {
 const DEFAULT_CALENDAR: CalendarInfo = { id: 'default', name: 'My Shifts', color: '#6366F1' };
 
 export function useShiftData() {
+  const docRef = useMemo(() => doc(db, 'user_data', 'default'), []);
   const [calendars, setCalendars] = useState<CalendarInfo[]>([DEFAULT_CALENDAR]);
   const [activeCalendarId, setActiveCalendarId] = useState('default');
   const calIdRef = useRef('default');
@@ -100,11 +104,25 @@ export function useShiftData() {
       console.error('Storage write failed:', key, e);
       setWriteError(true);
     });
-  }, []);
+    updateDoc(docRef, { [key]: data }).catch((err) => {
+      if (err.code === 'not-found') {
+        setDoc(docRef, { [key]: data }).catch(console.error);
+      } else {
+        console.error('Firestore write failed:', key, err);
+      }
+    });
+  }, [docRef]);
 
   const persistShifts = useCallback((shifts: ShiftType[]) => {
     AsyncStorage.setItem(ALL_SHIFTS_KEY, JSON.stringify(shifts)).catch(console.error);
-  }, []);
+    updateDoc(docRef, { [ALL_SHIFTS_KEY]: shifts }).catch((err) => {
+      if (err.code === 'not-found') {
+        setDoc(docRef, { [ALL_SHIFTS_KEY]: shifts }).catch(console.error);
+      } else {
+        console.error('Firestore write failed shifts:', err);
+      }
+    });
+  }, [docRef]);
 
   // --- Schema migrations ---
   async function runMigrations() {
@@ -136,11 +154,14 @@ export function useShiftData() {
         setActiveCalendarId(active);
         calIdRef.current = active;
 
+        let currentShifts = [...DEFAULT_SHIFTS];
         if (rawAllShifts) {
-          setAllShiftsState(safeParse<ShiftType[]>(rawAllShifts, [...DEFAULT_SHIFTS]));
+          currentShifts = safeParse<ShiftType[]>(rawAllShifts, [...DEFAULT_SHIFTS]);
+          setAllShiftsState(currentShifts);
         } else {
           const customs = safeParse<ShiftType[]>(rawCustom, []);
           const merged = [...DEFAULT_SHIFTS, ...customs];
+          currentShifts = merged;
           setAllShiftsState(merged);
           await AsyncStorage.setItem(ALL_SHIFTS_KEY, JSON.stringify(merged));
         }
@@ -154,19 +175,83 @@ export function useShiftData() {
           AsyncStorage.getItem(leaveKey(active)),
           AsyncStorage.getItem(leaveBalancesKey(active)),
         ]);
-        setShiftData(safeParse<ShiftData>(rawShifts, {}));
-        setNotesData(safeParse<NotesData>(rawNotes, {}));
-        setOvertimeData(safeParse<OvertimeData>(rawOT, {}));
-        setSwapsData(safeParse<SwapsData>(rawSwaps, {}));
-        setLeaveData(safeParse<LeaveData>(rawLeave, {}));
-        setLeaveBalancesState(safeParse<LeaveBalances>(rawLeaveBalances, Object.fromEntries(DEFAULT_LEAVE_TYPES.map((t) => [t.id, t.defaultDays]))));
+        
+        const localShifts = safeParse<ShiftData>(rawShifts, {});
+        const localNotes = safeParse<NotesData>(rawNotes, {});
+        const localOT = safeParse<OvertimeData>(rawOT, {});
+        const localSwaps = safeParse<SwapsData>(rawSwaps, {});
+        const localLeave = safeParse<LeaveData>(rawLeave, {});
+        const localLeaveBal = safeParse<LeaveBalances>(rawLeaveBalances, Object.fromEntries(DEFAULT_LEAVE_TYPES.map((t) => [t.id, t.defaultDays])));
+
+        setShiftData(localShifts);
+        setNotesData(localNotes);
+        setOvertimeData(localOT);
+        setSwapsData(localSwaps);
+        setLeaveData(localLeave);
+        setLeaveBalancesState(localLeaveBal);
+
+        // Fetch latest from Firestore to sync
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const remoteData = docSnap.data();
+
+          if (remoteData[CALENDARS_KEY]) {
+            setCalendars(remoteData[CALENDARS_KEY]);
+            AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(remoteData[CALENDARS_KEY])).catch(console.error);
+          }
+          const currentActive = remoteData[ACTIVE_CALENDAR_KEY] || active;
+          if (remoteData[ACTIVE_CALENDAR_KEY]) {
+            setActiveCalendarId(currentActive);
+            calIdRef.current = currentActive;
+            AsyncStorage.setItem(ACTIVE_CALENDAR_KEY, currentActive).catch(console.error);
+          }
+          if (remoteData[ALL_SHIFTS_KEY]) {
+            setAllShiftsState(remoteData[ALL_SHIFTS_KEY]);
+            AsyncStorage.setItem(ALL_SHIFTS_KEY, JSON.stringify(remoteData[ALL_SHIFTS_KEY])).catch(console.error);
+          }
+
+          const remoteShifts = remoteData[dataKey(currentActive)] !== undefined ? remoteData[dataKey(currentActive)] : localShifts;
+          const remoteNotes = remoteData[notesKey(currentActive)] !== undefined ? remoteData[notesKey(currentActive)] : localNotes;
+          const remoteOT = remoteData[overtimeKey(currentActive)] !== undefined ? remoteData[overtimeKey(currentActive)] : localOT;
+          const remoteSwaps = remoteData[swapsKey(currentActive)] !== undefined ? remoteData[swapsKey(currentActive)] : localSwaps;
+          const remoteLeave = remoteData[leaveKey(currentActive)] !== undefined ? remoteData[leaveKey(currentActive)] : localLeave;
+          const remoteLeaveBal = remoteData[leaveBalancesKey(currentActive)] !== undefined ? remoteData[leaveBalancesKey(currentActive)] : localLeaveBal;
+
+          setShiftData(remoteShifts);
+          setNotesData(remoteNotes);
+          setOvertimeData(remoteOT);
+          setSwapsData(remoteSwaps);
+          setLeaveData(remoteLeave);
+          setLeaveBalancesState(remoteLeaveBal);
+
+          AsyncStorage.setItem(dataKey(currentActive), JSON.stringify(remoteShifts)).catch(console.error);
+          AsyncStorage.setItem(notesKey(currentActive), JSON.stringify(remoteNotes)).catch(console.error);
+          AsyncStorage.setItem(overtimeKey(currentActive), JSON.stringify(remoteOT)).catch(console.error);
+          AsyncStorage.setItem(swapsKey(currentActive), JSON.stringify(remoteSwaps)).catch(console.error);
+          AsyncStorage.setItem(leaveKey(currentActive), JSON.stringify(remoteLeave)).catch(console.error);
+          AsyncStorage.setItem(leaveBalancesKey(currentActive), JSON.stringify(remoteLeaveBal)).catch(console.error);
+        } else {
+          // Initialize remote database with current local storage contents
+          const initialPayload: Record<string, any> = {
+            [CALENDARS_KEY]: cals,
+            [ACTIVE_CALENDAR_KEY]: active,
+            [ALL_SHIFTS_KEY]: currentShifts,
+            [dataKey(active)]: localShifts,
+            [notesKey(active)]: localNotes,
+            [overtimeKey(active)]: localOT,
+            [swapsKey(active)]: localSwaps,
+            [leaveKey(active)]: localLeave,
+            [leaveBalancesKey(active)]: localLeaveBal,
+          };
+          setDoc(docRef, initialPayload).catch(console.error);
+        }
       } catch (e) {
         console.error('Failed to load data', e);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [docRef]);
 
   // --- Switch calendar ---
   const switchCalendar = useCallback(async (calId: string) => {
@@ -174,6 +259,11 @@ export function useShiftData() {
     setActiveCalendarId(calId);
     calIdRef.current = calId;
     AsyncStorage.setItem(ACTIVE_CALENDAR_KEY, calId).catch(console.error);
+    
+    updateDoc(docRef, { [ACTIVE_CALENDAR_KEY]: calId }).catch((err) => {
+      if (err.code === 'not-found') setDoc(docRef, { [ACTIVE_CALENDAR_KEY]: calId }).catch(console.error);
+    });
+
     try {
       const [rawShifts, rawNotes, rawOT, rawSwaps, rawLeave, rawLeaveBal] = await Promise.all([
         AsyncStorage.getItem(dataKey(calId)),
@@ -183,50 +273,99 @@ export function useShiftData() {
         AsyncStorage.getItem(leaveKey(calId)),
         AsyncStorage.getItem(leaveBalancesKey(calId)),
       ]);
-      // Discard stale results if another switch happened during the await
       if (switchGen.current !== gen) return;
-      setShiftData(safeParse<ShiftData>(rawShifts, {}));
-      setNotesData(safeParse<NotesData>(rawNotes, {}));
-      setOvertimeData(safeParse<OvertimeData>(rawOT, {}));
-      setSwapsData(safeParse<SwapsData>(rawSwaps, {}));
-      setLeaveData(safeParse<LeaveData>(rawLeave, {}));
-      setLeaveBalancesState(safeParse<LeaveBalances>(rawLeaveBal, Object.fromEntries(DEFAULT_LEAVE_TYPES.map((t) => [t.id, t.defaultDays]))));
+
+      const localShifts = safeParse<ShiftData>(rawShifts, {});
+      const localNotes = safeParse<NotesData>(rawNotes, {});
+      const localOT = safeParse<OvertimeData>(rawOT, {});
+      const localSwaps = safeParse<SwapsData>(rawSwaps, {});
+      const localLeave = safeParse<LeaveData>(rawLeave, {});
+      const localLeaveBal = safeParse<LeaveBalances>(rawLeaveBal, Object.fromEntries(DEFAULT_LEAVE_TYPES.map((t) => [t.id, t.defaultDays])));
+
+      setShiftData(localShifts);
+      setNotesData(localNotes);
+      setOvertimeData(localOT);
+      setSwapsData(localSwaps);
+      setLeaveData(localLeave);
+      setLeaveBalancesState(localLeaveBal);
+
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists() && switchGen.current === gen) {
+        const remoteData = docSnap.data();
+        const remoteShifts = remoteData[dataKey(calId)] !== undefined ? remoteData[dataKey(calId)] : localShifts;
+        const remoteNotes = remoteData[notesKey(calId)] !== undefined ? remoteData[notesKey(calId)] : localNotes;
+        const remoteOT = remoteData[overtimeKey(calId)] !== undefined ? remoteData[overtimeKey(calId)] : localOT;
+        const remoteSwaps = remoteData[swapsKey(calId)] !== undefined ? remoteData[swapsKey(calId)] : localSwaps;
+        const remoteLeave = remoteData[leaveKey(calId)] !== undefined ? remoteData[leaveKey(calId)] : localLeave;
+        const remoteLeaveBal = remoteData[leaveBalancesKey(calId)] !== undefined ? remoteData[leaveBalancesKey(calId)] : localLeaveBal;
+
+        setShiftData(remoteShifts);
+        setNotesData(remoteNotes);
+        setOvertimeData(remoteOT);
+        setSwapsData(remoteSwaps);
+        setLeaveData(remoteLeave);
+        setLeaveBalancesState(remoteLeaveBal);
+
+        AsyncStorage.setItem(dataKey(calId), JSON.stringify(remoteShifts)).catch(console.error);
+        AsyncStorage.setItem(notesKey(calId), JSON.stringify(remoteNotes)).catch(console.error);
+        AsyncStorage.setItem(overtimeKey(calId), JSON.stringify(remoteOT)).catch(console.error);
+        AsyncStorage.setItem(swapsKey(calId), JSON.stringify(remoteSwaps)).catch(console.error);
+        AsyncStorage.setItem(leaveKey(calId), JSON.stringify(remoteLeave)).catch(console.error);
+        AsyncStorage.setItem(leaveBalancesKey(calId), JSON.stringify(remoteLeaveBal)).catch(console.error);
+      }
     } catch (e) {
       console.error('Failed to switch calendar', e);
     }
-  }, []);
+  }, [docRef]);
 
   const addCalendar = useCallback(async (cal: CalendarInfo) => {
     setCalendars((prev) => {
       const next = [...prev, cal];
       AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(next)).catch(console.error);
+      updateDoc(docRef, { [CALENDARS_KEY]: next }).catch((err) => {
+        if (err.code === 'not-found') setDoc(docRef, { [CALENDARS_KEY]: next }).catch(console.error);
+      });
       return next;
     });
-  }, []);
+  }, [docRef]);
 
   const deleteCalendar = useCallback(async (calId: string) => {
     if (calId === 'default') return;
     setCalendars((prev) => {
       const next = prev.filter((c) => c.id !== calId);
       AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(next)).catch(console.error);
+      updateDoc(docRef, { [CALENDARS_KEY]: next }).catch(console.error);
       return next;
     });
     AsyncStorage.multiRemove([
       dataKey(calId), notesKey(calId), overtimeKey(calId),
       swapsKey(calId), leaveKey(calId), leaveBalancesKey(calId),
     ]).catch(console.error);
+    
+    updateDoc(docRef, {
+      [dataKey(calId)]: deleteField(),
+      [notesKey(calId)]: deleteField(),
+      [overtimeKey(calId)]: deleteField(),
+      [swapsKey(calId)]: deleteField(),
+      [leaveKey(calId)]: deleteField(),
+      [leaveBalancesKey(calId)]: deleteField(),
+    }).catch(console.error);
+
     if (calId === activeCalendarId) {
       switchCalendar('default');
     }
-  }, [activeCalendarId, switchCalendar]);
+  }, [activeCalendarId, switchCalendar, docRef]);
 
   const renameCalendar = useCallback(async (calId: string, name: string, color: string) => {
     setCalendars((prev) => {
       const next = prev.map((c) => (c.id === calId ? { ...c, name, color } : c));
       AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(next)).catch(console.error);
+      updateDoc(docRef, { [CALENDARS_KEY]: next }).catch((err) => {
+        if (err.code === 'not-found') setDoc(docRef, { [CALENDARS_KEY]: next }).catch(console.error);
+      });
       return next;
     });
-  }, []);
+  }, [docRef]);
 
   // --- Shift operations ---
   const setShift = useCallback((date: string, code: string) => {
