@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "deploymentTarget": "16.0",
       "infoPlist": {
         "CFBundleDocumentTypes": [
           {
@@ -31,9 +32,26 @@
               "public.json",
               "public.data"
             ]
+          },
+          {
+            "CFBundleTypeName": "CSV File",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.comma-separated-values-text",
+              "public.plain-text"
+            ]
+          },
+          {
+            "CFBundleTypeName": "JSON Backup",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.json",
+              "public.data"
+            ]
           }
         ]
-      }
+      },
+      "bundleIdentifier": "com.itroy0.ShiftCalendar"
     },
     "android": {
       "versionCode": 10,
@@ -115,7 +133,8 @@
         }
       ],
       "expo-font",
-      "./plugins/withAlarmSound"
+      "./plugins/withAlarmSound",
+      "./plugins/withIosDeploymentTarget"
     ],
     "extra": {
       "eas": {
