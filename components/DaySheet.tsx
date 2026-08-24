@@ -27,6 +27,7 @@ interface Props {
   leaveTypes: LeaveType[];
   onSetLeave: (leaveTypeId: string) => void;
   onClearLeave: (date: string) => void;
+  onNavigateDate?: (date: string) => void;
   colors: {
     surface: string;
     surfaceVariant: string;
@@ -58,11 +59,13 @@ export const DaySheet = forwardRef<BottomSheet, Props>(
       leaveTypes,
       onSetLeave,
       onClearLeave,
+      onNavigateDate,
       colors,
     },
     ref
   ) => {
     const snapPoints = useMemo(() => ['50%', '85%'], []);
+    const [currentIndex, setCurrentIndex] = useState(-1);
     const [noteText, setNoteText] = useState(currentNote);
     const [showSwapForm, setShowSwapForm] = useState(false);
     const [swapWant, setSwapWant] = useState('any');
@@ -165,6 +168,19 @@ export const DaySheet = forwardRef<BottomSheet, Props>(
       }
     }, [ref]);
 
+    const navigateDay = (direction: number) => {
+      if (!selectedDate) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const [y, m, d] = selectedDate.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      date.setDate(date.getDate() + direction);
+      const newYear = date.getFullYear();
+      const newMonth = String(date.getMonth() + 1).padStart(2, '0');
+      const newDay = String(date.getDate()).padStart(2, '0');
+      const nextDateStr = `${newYear}-${newMonth}-${newDay}`;
+      onNavigateDate?.(nextDateStr);
+    };
+
     const dateLabel = selectedDate
       ? format(new Date(selectedDate + 'T00:00:00'), 'EEEE, d MMMM yyyy')
       : '';
@@ -180,13 +196,71 @@ export const DaySheet = forwardRef<BottomSheet, Props>(
         keyboardBlurBehavior="restore"
         backgroundStyle={{ backgroundColor: colors.surface, borderRadius: 24 }}
         handleIndicatorStyle={{ backgroundColor: colors.textSecondary + '80', width: 36 }}
+        onChange={setCurrentIndex}
       >
+        {/* Sticky Desktop Controls */}
+        {currentIndex >= 0 && (
+          <View style={styles.desktopControls}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (ref && typeof ref !== 'function' && ref.current) {
+                  ref.current.snapToIndex(currentIndex === 0 ? 1 : 0);
+                }
+              }}
+              style={[styles.controlBtn, { backgroundColor: colors.surfaceVariant }]}
+              accessibilityLabel={currentIndex === 0 ? "Expand" : "Collapse"}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons
+                name={currentIndex === 0 ? "chevron-double-up" : "chevron-double-down"}
+                size={18}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (ref && typeof ref !== 'function' && ref.current) {
+                  ref.current.close();
+                }
+              }}
+              style={[styles.controlBtn, { backgroundColor: colors.surfaceVariant }]}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="close" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <BottomSheetScrollView
           style={styles.content}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={[styles.dateText, { color: colors.text }]}>{dateLabel}</Text>
+          <View style={styles.dateHeaderRow}>
+            <TouchableOpacity
+              onPress={() => navigateDay(-1)}
+              style={styles.navArrow}
+              accessibilityLabel="Previous day"
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="chevron-left" size={26} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            <Text style={[styles.dateText, { color: colors.text }]}>{dateLabel}</Text>
+
+            <TouchableOpacity
+              onPress={() => navigateDay(1)}
+              style={styles.navArrow}
+              accessibilityLabel="Next day"
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="chevron-right" size={26} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
 
           {/* Current shift card */}
           {currentShift && (
@@ -352,7 +426,7 @@ export const DaySheet = forwardRef<BottomSheet, Props>(
           )}
 
           {/* Swap section */}
-          {currentShift && currentShift.startTime && (
+          {!!(currentShift && currentShift.startTime) && (
             currentSwap ? (
               <View style={[styles.swapSection, { borderColor: '#8B5CF630' }]}>
                 <View style={styles.swapHeader}>
@@ -521,7 +595,38 @@ export const DaySheet = forwardRef<BottomSheet, Props>(
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20 },
-  dateText: { fontSize: 19, fontWeight: '800', marginBottom: 14 },
+  desktopControls: {
+    position: 'absolute',
+    top: 8,
+    right: 20,
+    flexDirection: 'row',
+    gap: 8,
+    zIndex: 10,
+  },
+  controlBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  dateText: {
+    fontSize: 19,
+    fontWeight: '800',
+    textAlign: 'center',
+    flex: 1,
+  },
+  navArrow: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   shiftCard: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -287,6 +287,15 @@ export default function CalendarScreen() {
     [selectedDate, setOvertime]
   );
 
+  const handleNavigateDate = useCallback((dateString: string) => {
+    setSelectedDate(dateString);
+    
+    const date = new Date(dateString + 'T00:00:00');
+    if (date.getMonth() !== currentMonth.getMonth() || date.getFullYear() !== currentMonth.getFullYear()) {
+      setCurrentMonth(date);
+    }
+  }, [currentMonth]);
+
   const handleApplyPattern = useCallback(
     (entries: Record<string, string>) => {
       // Save previous state for undo
@@ -690,6 +699,7 @@ export default function CalendarScreen() {
         leaveTypes={leaveTypes}
         onSetLeave={handleSetLeave}
         onClearLeave={clearLeave}
+        onNavigateDate={handleNavigateDate}
         colors={colors}
       />
 

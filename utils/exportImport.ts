@@ -98,6 +98,18 @@ export async function exportCSV(
   const monthLabel = month !== null ? format(new Date(year, month), 'MMM') : 'Year';
   const fileName = `${calendarName.replace(/\s+/g, '_')}_${monthLabel}_${year}.csv`;
 
+  if (Platform.OS === 'web') {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return;
+  }
+
   const file = new File(Paths.cache, fileName);
   file.write(csv);
 
@@ -121,8 +133,20 @@ export async function importCSV(allShifts: ShiftType[]): Promise<ImportResult | 
 
   if (result.canceled || !result.assets?.length) return null;
 
-  const pickedFile = new File(result.assets[0].uri);
-  const content = await pickedFile.text();
+  let content = '';
+  if (Platform.OS === 'web') {
+    const fileAsset = result.assets[0];
+    if (fileAsset.file) {
+      content = await fileAsset.file.text();
+    } else {
+      const response = await fetch(fileAsset.uri);
+      content = await response.text();
+    }
+  } else {
+    const pickedFile = new File(result.assets[0].uri);
+    content = await pickedFile.text();
+  }
+
   return parseCSVContent(content, allShifts);
 }
 
@@ -399,9 +423,15 @@ export async function exportPDF(
   calendarName: string,
 ) {
   const html = buildPDFHtml(year, month, shiftData, notesData, overtimeData, allShifts, calendarName);
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
   const monthLabel = month !== null ? format(new Date(year, month), 'MMM') : 'Year';
   const fileName = `${calendarName.replace(/\s+/g, '_')}_${monthLabel}_${year}.pdf`;
+
+  if (Platform.OS === 'web') {
+    await Print.printAsync({ html });
+    return;
+  }
+
+  const { uri } = await Print.printToFileAsync({ html, base64: false });
   const srcFile = new File(uri);
   const destFile = new File(Paths.cache, fileName);
   srcFile.move(destFile);
@@ -419,6 +449,19 @@ export async function backupAll() {
   });
   const json = JSON.stringify({ version: 2, timestamp: new Date().toISOString(), data }, null, 2);
   const fileName = `ShiftCalendar_Backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
+
+  if (Platform.OS === 'web') {
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return;
+  }
+
   const file = new File(Paths.cache, fileName);
   file.write(json);
   await saveToDevice(file.uri, fileName, 'application/json', 'public.json');
@@ -436,8 +479,20 @@ export async function restoreBackup(): Promise<RestoreResult | null> {
 
   if (result.canceled || !result.assets?.length) return null;
 
-  const pickedFile = new File(result.assets[0].uri);
-  const content = await pickedFile.text();
+  let content = '';
+  if (Platform.OS === 'web') {
+    const fileAsset = result.assets[0];
+    if (fileAsset.file) {
+      content = await fileAsset.file.text();
+    } else {
+      const response = await fetch(fileAsset.uri);
+      content = await response.text();
+    }
+  } else {
+    const pickedFile = new File(result.assets[0].uri);
+    content = await pickedFile.text();
+  }
+
   return restoreBackupFromContent(content);
 }
 
