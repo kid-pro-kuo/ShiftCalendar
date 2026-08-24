@@ -165,8 +165,10 @@ export function parseCSVContent(content: string, allShifts: ShiftType[]): Import
     const parts = parseCSVLine(lines[i]);
     if (parts.length < 3) continue;
 
-    const dateStr = parts[0].trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue;
+    const dateStrRaw = parts[0].trim();
+    const dateMatch = dateStrRaw.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+    if (!dateMatch) continue;
+    const dateStr = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
 
     const code = parts[2].trim();
     if (code && validCodes.has(code)) {
