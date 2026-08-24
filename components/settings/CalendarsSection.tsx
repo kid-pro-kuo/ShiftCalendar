@@ -17,6 +17,7 @@ type Props = {
   setNewCalColor: (v: string) => void;
   onAddCalendar: () => void;
   onDeleteCalendar: (id: string, name: string) => void;
+  onSelectCalendar: (id: string) => void;
 };
 
 export function CalendarsSection({
@@ -31,6 +32,7 @@ export function CalendarsSection({
   setNewCalColor,
   onAddCalendar,
   onDeleteCalendar,
+  onSelectCalendar,
 }: Props) {
   return (
     <>
@@ -49,15 +51,23 @@ export function CalendarsSection({
           <React.Fragment key={cal.id}>
             {i > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
             <View style={styles.calRow}>
-              <View style={[styles.calDot, { backgroundColor: cal.color }]} />
-              <Text
-                style={[
-                  styles.calName,
-                  { color: cal.id === activeCalendar.id ? colors.primary : colors.text },
-                ]}
+              <TouchableOpacity
+                style={styles.calSelectArea}
+                onPress={() => onSelectCalendar(cal.id)}
+                accessibilityLabel={`${cal.name} calendar${cal.id === activeCalendar.id ? ', active' : ''}`}
+                accessibilityRole="button"
+                activeOpacity={0.7}
               >
-                {cal.name}
-              </Text>
+                <View style={[styles.calDot, { backgroundColor: cal.color }]} />
+                <Text
+                  style={[
+                    styles.calName,
+                    { color: cal.id === activeCalendar.id ? colors.primary : colors.text },
+                  ]}
+                >
+                  {cal.name}
+                </Text>
+              </TouchableOpacity>
               {cal.id === activeCalendar.id && (
                 <View style={[styles.activeBadge, { backgroundColor: colors.primary + '20' }]}>
                   <Text style={[styles.activeBadgeText, { color: colors.primary }]}>Active</Text>
@@ -123,6 +133,13 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: 1, padding: 16 },
   divider: { height: 1 },
   calRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
+  calSelectArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+    alignSelf: 'stretch',
+  },
   calDot: { width: 10, height: 10, borderRadius: 5 },
   calName: { flex: 1, fontSize: 15, fontWeight: '600' },
   activeBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },

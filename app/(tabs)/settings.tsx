@@ -291,6 +291,13 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleSelectCalendar = (calId: string) => {
+    if (calId !== activeCalendar.id) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      switchCalendar(calId);
+    }
+  };
+
   const themeModes: { value: ThemeMode; label: string; icon: string }[] = [
     { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
     { value: 'dark', label: 'Dark', icon: 'moon-waning-crescent' },
@@ -325,6 +332,7 @@ export default function SettingsScreen() {
           setNewCalColor={setNewCalColor}
           onAddCalendar={handleAddCalendar}
           onDeleteCalendar={handleDeleteCalendar}
+          onSelectCalendar={handleSelectCalendar}
         />
 
         <LeaveBalanceSection
