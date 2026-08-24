@@ -62,6 +62,7 @@ export function useShiftData() {
   const [activeCalendarId, setActiveCalendarId] = useState('default');
   const calIdRef = useRef('default');
   const [shiftData, setShiftData] = useState<ShiftData>({});
+  const [allCalendarsShiftData, setAllCalendarsShiftData] = useState<Record<string, ShiftData>>({});
   const [notesData, setNotesData] = useState<NotesData>({});
   const [overtimeData, setOvertimeData] = useState<OvertimeData>({});
   const [swapsData, setSwapsData] = useState<SwapsData>({});
@@ -190,14 +191,24 @@ export function useShiftData() {
         setLeaveData(localLeave);
         setLeaveBalancesState(localLeaveBal);
 
+        // Load all calendars' shift data for week view
+        const allCalsShiftData: Record<string, ShiftData> = {};
+        await Promise.all(cals.map(async (cal) => {
+          const raw = await AsyncStorage.getItem(dataKey(cal.id));
+          allCalsShiftData[cal.id] = safeParse<ShiftData>(raw, {});
+        }));
+        setAllCalendarsShiftData(allCalsShiftData);
+
         // Fetch latest from Firestore to sync
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const remoteData = docSnap.data();
 
+          let activeCals = cals;
           if (remoteData[CALENDARS_KEY]) {
-            setCalendars(remoteData[CALENDARS_KEY]);
-            AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(remoteData[CALENDARS_KEY])).catch(console.error);
+            activeCals = remoteData[CALENDARS_KEY];
+            setCalendars(activeCals);
+            AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(activeCals)).catch(console.error);
           }
           const currentActive = remoteData[ACTIVE_CALENDAR_KEY] || active;
           if (remoteData[ACTIVE_CALENDAR_KEY]) {
@@ -230,6 +241,15 @@ export function useShiftData() {
           AsyncStorage.setItem(swapsKey(currentActive), JSON.stringify(remoteSwaps)).catch(console.error);
           AsyncStorage.setItem(leaveKey(currentActive), JSON.stringify(remoteLeave)).catch(console.error);
           AsyncStorage.setItem(leaveBalancesKey(currentActive), JSON.stringify(remoteLeaveBal)).catch(console.error);
+
+          // Sync remote shifts for all calendars
+          activeCals.forEach((cal: CalendarInfo) => {
+            if (remoteData[dataKey(cal.id)] !== undefined) {
+              allCalsShiftData[cal.id] = remoteData[dataKey(cal.id)];
+              AsyncStorage.setItem(dataKey(cal.id), JSON.stringify(remoteData[dataKey(cal.id)])).catch(console.error);
+            }
+          });
+          setAllCalendarsShiftData({ ...allCalsShiftData });
         } else {
           // Initialize remote database with current local storage contents
           const initialPayload: Record<string, any> = {
@@ -283,6 +303,7 @@ export function useShiftData() {
       const localLeaveBal = safeParse<LeaveBalances>(rawLeaveBal, Object.fromEntries(DEFAULT_LEAVE_TYPES.map((t) => [t.id, t.defaultDays])));
 
       setShiftData(localShifts);
+      setAllCalendarsShiftData((all) => ({ ...all, [calId]: localShifts }));
       setNotesData(localNotes);
       setOvertimeData(localOT);
       setSwapsData(localSwaps);
@@ -300,6 +321,7 @@ export function useShiftData() {
         const remoteLeaveBal = remoteData[leaveBalancesKey(calId)] !== undefined ? remoteData[leaveBalancesKey(calId)] : localLeaveBal;
 
         setShiftData(remoteShifts);
+        setAllCalendarsShiftData((all) => ({ ...all, [calId]: remoteShifts }));
         setNotesData(remoteNotes);
         setOvertimeData(remoteOT);
         setSwapsData(remoteSwaps);
@@ -327,6 +349,7 @@ export function useShiftData() {
       });
       return next;
     });
+    setAllCalendarsShiftData((all) => ({ ...all, [cal.id]: {} }));
   }, [docRef]);
 
   const deleteCalendar = useCallback(async (calId: string) => {
@@ -335,6 +358,11 @@ export function useShiftData() {
       const next = prev.filter((c) => c.id !== calId);
       AsyncStorage.setItem(CALENDARS_KEY, JSON.stringify(next)).catch(console.error);
       updateDoc(docRef, { [CALENDARS_KEY]: next }).catch(console.error);
+      return next;
+    });
+    setAllCalendarsShiftData((all) => {
+      const next = { ...all };
+      delete next[calId];
       return next;
     });
     AsyncStorage.multiRemove([
@@ -373,6 +401,7 @@ export function useShiftData() {
     setShiftData((prev) => {
       const next = { ...prev, [date]: code };
       persist(dataKey(calIdRef.current), next);
+      setAllCalendarsShiftData((all) => ({ ...all, [calIdRef.current]: next }));
       return next;
     });
   }, [persist]);
@@ -382,6 +411,7 @@ export function useShiftData() {
       const next = { ...prev };
       delete next[date];
       persist(dataKey(calIdRef.current), next);
+      setAllCalendarsShiftData((all) => ({ ...all, [calIdRef.current]: next }));
       return next;
     });
   }, [persist]);
@@ -390,6 +420,7 @@ export function useShiftData() {
     setShiftData((prev) => {
       const next = { ...prev, ...entries };
       persist(dataKey(calIdRef.current), next);
+      setAllCalendarsShiftData((all) => ({ ...all, [calIdRef.current]: next }));
       return next;
     });
   }, [persist]);
@@ -563,6 +594,7 @@ export function useShiftData() {
 
   return {
     shiftData,
+    allCalendarsShiftData,
     notesData,
     overtimeData,
     swapsData,

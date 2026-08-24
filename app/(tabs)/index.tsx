@@ -42,6 +42,7 @@ export default function CalendarScreen() {
   const { colors, weekStart } = useAppSettings();
   const {
     shiftData,
+    allCalendarsShiftData,
     notesData,
     overtimeData,
     swapsData,
@@ -64,6 +65,13 @@ export default function CalendarScreen() {
     switchCalendar,
   } = useShifts();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedWeekCalendars, setSelectedWeekCalendars] = useState<string[]>([activeCalendar.id]);
+
+  useEffect(() => {
+    if (activeCalendar && activeCalendar.id && !selectedWeekCalendars.includes(activeCalendar.id)) {
+      setSelectedWeekCalendars((prev) => [...prev, activeCalendar.id]);
+    }
+  }, [activeCalendar.id]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [repeatMode, setRepeatMode] = useState(false);
   const [patternStart, setPatternStart] = useState<string | null>(null);
@@ -194,7 +202,10 @@ export default function CalendarScreen() {
   }, [monthKey, currentMonth]);
 
   const handleDayPress = useCallback(
-    (dateString: string) => {
+    (dateString: string, calendarId?: string) => {
+      if (calendarId && calendarId !== activeCalendar.id) {
+        switchCalendar(calendarId);
+      }
       if (templateMode && selectedTemplate) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setTemplateStart(dateString);
@@ -221,7 +232,7 @@ export default function CalendarScreen() {
       setSelectedDate(dateString);
       daySheetRef.current?.snapToIndex(0);
     },
-    [repeatMode, patternStart, patternEnd, templateMode, selectedTemplate]
+    [repeatMode, patternStart, patternEnd, templateMode, selectedTemplate, activeCalendar.id, switchCalendar]
   );
 
   // Long-press quick-assign
@@ -599,6 +610,17 @@ export default function CalendarScreen() {
         calendars={calendars}
         activeCalendarId={activeCalendar.id}
         onSwitch={switchCalendar}
+        selectedIds={selectedWeekCalendars}
+        onToggle={(calId) => {
+          setSelectedWeekCalendars((prev) => {
+            if (prev.includes(calId)) {
+              if (prev.length <= 1) return prev;
+              return prev.filter((id) => id !== calId);
+            }
+            return [...prev, calId];
+          });
+        }}
+        multiSelect={viewMode === 'week'}
         colors={colors}
       />
 
@@ -648,7 +670,9 @@ export default function CalendarScreen() {
             <WeekView
               currentDate={currentMonth}
               weekStart={weekStart}
-              shiftData={shiftData}
+              allCalendarsShiftData={allCalendarsShiftData}
+              selectedCalendarIds={selectedWeekCalendars}
+              calendars={calendars}
               notesData={notesData}
               overtimeData={overtimeData}
               getShiftByCode={getShiftByCode}

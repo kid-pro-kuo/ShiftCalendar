@@ -4,8 +4,11 @@ import { CalendarInfo } from '../hooks/useShiftData';
 
 interface Props {
   calendars: CalendarInfo[];
-  activeCalendarId: string;
-  onSwitch: (calId: string) => void;
+  activeCalendarId?: string;
+  onSwitch?: (calId: string) => void;
+  selectedIds?: string[];
+  onToggle?: (calId: string) => void;
+  multiSelect?: boolean;
   colors: {
     text: string;
     textSecondary: string;
@@ -13,7 +16,15 @@ interface Props {
   };
 }
 
-export const CalendarSwitcher = React.memo(function CalendarSwitcher({ calendars, activeCalendarId, onSwitch, colors }: Props) {
+export const CalendarSwitcher = React.memo(function CalendarSwitcher({
+  calendars,
+  activeCalendarId,
+  onSwitch,
+  selectedIds = [],
+  onToggle,
+  multiSelect = false,
+  colors,
+}: Props) {
   if (calendars.length <= 1) return null;
 
   return (
@@ -24,7 +35,7 @@ export const CalendarSwitcher = React.memo(function CalendarSwitcher({ calendars
       contentContainerStyle={styles.container}
     >
       {calendars.map((cal) => {
-        const isActive = cal.id === activeCalendarId;
+        const isActive = multiSelect ? selectedIds.includes(cal.id) : cal.id === activeCalendarId;
         return (
           <TouchableOpacity
             key={cal.id}
@@ -35,7 +46,13 @@ export const CalendarSwitcher = React.memo(function CalendarSwitcher({ calendars
                 borderColor: isActive ? cal.color : colors.border,
               },
             ]}
-            onPress={() => onSwitch(cal.id)}
+            onPress={() => {
+              if (multiSelect) {
+                onToggle?.(cal.id);
+              } else {
+                onSwitch?.(cal.id);
+              }
+            }}
             accessibilityLabel={`${cal.name} calendar${isActive ? ', active' : ''}`}
             accessibilityRole="button"
           >

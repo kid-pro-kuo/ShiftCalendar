@@ -5,6 +5,7 @@ import { ShiftType } from '../constants/shifts';
 
 interface ShiftContextType {
   shiftData: ShiftData;
+  allCalendarsShiftData: Record<string, ShiftData>;
   notesData: NotesData;
   overtimeData: OvertimeData;
   swapsData: SwapsData;
@@ -43,6 +44,7 @@ interface ShiftContextType {
 
 const ShiftContext = createContext<ShiftContextType>({
   shiftData: {},
+  allCalendarsShiftData: {},
   notesData: {},
   overtimeData: {},
   swapsData: {},
@@ -82,7 +84,7 @@ const ShiftContext = createContext<ShiftContextType>({
 export function ShiftProvider({ children }: { children: React.ReactNode }) {
   const data = useShiftData();
   const value = useMemo(() => data, [
-    data.shiftData, data.notesData, data.overtimeData, data.swapsData,
+    data.shiftData, data.allCalendarsShiftData, data.notesData, data.overtimeData, data.swapsData,
     data.leaveData, data.leaveBalances, data.leaveTypes,
     data.allShifts, data.loading, data.writeError, data.lastUsedShift,
     data.calendars, data.activeCalendar, data.activeCalendarId,
